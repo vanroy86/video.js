@@ -4,6 +4,7 @@
  * @file component.js
  */
 import window from 'global/window';
+import document from 'global/document';
 import evented from './mixins/evented';
 import stateful from './mixins/stateful';
 import * as Dom from './utils/dom.js';
@@ -1382,6 +1383,84 @@ class Component {
     this.off('dispose', disposeFn);
 
     return intervalId;
+  }
+
+  /**
+   * Creates an Interval respects the visibility of the document.
+   * It will NOT run when the document is hidden, and will run at all other
+   * times.
+   *
+   * @param {Component~GenericCallback} fn
+   *        The function to run every `x` seconds, unless document is hidden
+   *
+   * @param {number} interval
+   *        Execute the specified function every `x` milliseconds unless the document
+   *        is hidden
+   *
+   * @return {number} guid
+   *         The guid of the visible interval that can be used to clear it in
+   *         {@link Component#clearVisibleInterval}
+   */
+  setVisibleInterval(fn, interval) {
+    this.visibleIntervals_ = this.visibleIntervals_ || {};
+    const guid = Guid.newGUID();
+
+    this.visibleIntervals_[guid] = this.setInterval(fn, interval);
+
+    const toggleVisibility = () => {
+      this.clearInterval(this.visibleIntervals_[guid]);
+      if (document.hidden) {
+        return;
+      }
+
+      this.visibleIntervals_[guid] = this.setInterval(fn, interval);
+
+      // we just switched back to the page and someone may be looking, so, update ASAP
+      fn.call(this);
+    };
+
+    const disposeFn = () => {
+      this.clearVisibleInterval(this.visibleIntervals_[guid]);
+    };
+
+    disposeFn.guid = `vjs-visible-interval-${guid}`;
+    toggleVisibility.guid = `vjs-visible-interval-toggle-${guid}`;
+
+    // we don't need to update the play progress if the document is hidden,
+    // also, this causes the CPU to spike and eventually crash the page on IE11.
+    if ('hidden' in document && 'visibilityState' in document) {
+      this.on(document, 'visibilitychange', toggleVisibility);
+    }
+
+    this.on('dispose', disposeFn);
+
+    return guid;
+  }
+
+  /**
+   * Clears an interval that gets created via {@link Component#setVisibleInterval}.
+   *
+   * @param {number} guid
+   *        The guid of the visible interval to clear. The return value of
+   *        {@link Component#setVisibleInterval}
+   *
+   * @return {number}
+   *         Returns the interval guid that was cleared.
+   */
+  clearVisibleInterval(guid) {
+    this.visibleIntervals_ = this.visibleIntervals_ || {};
+    this.clearInterval(this.visibleIntervals_[guid]);
+
+    const disposeFn = function() {};
+    const toggleVisibility = function() {};
+
+    disposeFn.guid = `vjs-visible-interval-${guid}`;
+    toggleVisibility.guid = `vjs-visible-interval-toggle-${guid}`;
+
+    this.off('dispose', disposeFn);
+    this.off(document, 'visibilitychange', toggleVisibility);
+
+    return guid;
   }
 
   /**
