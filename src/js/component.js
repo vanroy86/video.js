@@ -1405,7 +1405,7 @@ class Component {
     this.visibleIntervals_ = this.visibleIntervals_ || {};
     const guid = Guid.newGUID();
 
-    this.visibleIntervals_[guid] = this.setInterval(fn, interval);
+    this.visibleIntervals_[guid] = null;
 
     const toggleVisibility = () => {
       this.clearInterval(this.visibleIntervals_[guid]);
@@ -1431,6 +1431,8 @@ class Component {
     if ('hidden' in document && 'visibilityState' in document) {
       this.on(document, 'visibilitychange', toggleVisibility);
     }
+
+    toggleVisibility();
 
     this.on('dispose', disposeFn);
 
